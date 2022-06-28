@@ -1,0 +1,6 @@
+{
+  "name": "Swap",
+  "short_description": "Atomic/Submarine Swaps with Boltz compliant APIs",
+  "icon": "swap_horiz",
+  "contributors": ["mardukexchange"]
+}
