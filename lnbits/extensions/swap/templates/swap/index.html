@@ -17,7 +17,8 @@
         <q-btn unelevated color="primary" id="connectButton" @click="onConnect" :disabled="selectedAccount"
           >Connect Wallet</q-btn
         >
-        <q-btn unelevated color="primary" :disabled="!selectedAccount" @click="formDialog.show = true"
+        <!-- :disabled="!selectedAccount" -->
+        <q-btn unelevated color="primary"  @click="formDialog.show = true"
           >Create Swap</q-btn
         >
       </q-card-section>
@@ -50,14 +51,47 @@
           label="Wallet *"
         >
         </q-select>
-        <q-input
-          filled
-          dense
-          v-model.trim="formDialog.data.url"
-          type="url"
-          label="Redirect URL *"
-        ></q-input>
-        <q-input
+        <div style="display: flex;">
+          <q-select
+            filled
+            dense
+            emit-value
+            v-model="formDialog.data.base"
+            style="flex: 1; margin-right: 2px;"
+            :options="this.currencies"
+            label="You Send"
+          >
+          </q-select>
+          <q-input
+            filled
+            dense
+            v-model.trim="formDialog.data.baseAmount"
+            style="flex: 1;"
+            type="number"
+            label="Amount"
+          ></q-input>
+        </div>
+        <div style="display: flex;">
+          <q-select
+            filled
+            dense
+            emit-value
+            v-model="formDialog.data.quote"
+            style="flex: 1; margin-right: 2px;"
+            :options="this.currencies"
+            label="You Receive"
+          >
+          </q-select>
+          <q-input
+            filled
+            dense
+            v-model.trim="formDialog.data.quoteAmount"
+            style="flex: 1;"
+            type="number"
+            label="Amount"
+          ></q-input>
+        </div>
+        <!-- <q-input
           filled
           dense
           v-model.trim="formDialog.data.memo"
@@ -96,14 +130,14 @@
               >
             </q-item-section>
           </q-item>
-        </q-list>
+        </q-list> -->
         <div class="row q-mt-lg">
           <q-btn
             unelevated
             color="primary"
-            :disable="formDialog.data.amount == null || formDialog.data.amount < 0 || formDialog.data.url == null || formDialog.data.memo == null"
+            :disable="formDialog.data.baseAmount == null || formDialog.data.baseAmount < 0 || formDialog.data.quoteAmount == null || formDialog.data.quoteAmount < 0"
             type="submit"
-            >Create paywall</q-btn
+            >Create Swap</q-btn
           >
           <q-btn v-close-popup flat color="grey" class="q-ml-auto"
             >Cancel</q-btn
@@ -169,12 +203,32 @@
         selectedAccount: null,
         userBalances: {},
         sometest: 'sometest',
+        boltzApi: 'https://testnet.lnswap.org:9007',
+        currencies: null,
+        rates: null,
+        limits: null,
+        fees: null,
+      }
+    },
+    watch: {
+      'formDialog.data.baseAmount'(newAmount, oldAmount) {
+        // console.log('watch baseAmount ', oldAmount, newAmount)
+        console.log('rates, this.formDialog.data ', this.rates, this.formDialog.data, `${this.formDialog.data.base}/${this.formDialog.data.quote}`)
+        if (!this.formDialog.data.base || !this.formDialog.data.quote) return
+        this.formDialog.data.quoteAmount = this.rates[`${this.formDialog.data.base}/${this.formDialog.data.quote}`]['rate']*newAmount
+      },
+      'formDialog.data.quoteAmount'(newAmount, oldAmount) {
+        // console.log('watch quoteAmount ', newAmount, oldAmount)
+        // console.log('rates, this.formDialog.data, ', this.rates, this.formDialog.data, `${this.formDialog.data.quote}/${this.formDialog.data.base}`)
+        if (!this.formDialog.data.base || !this.formDialog.data.quote) return
+        this.formDialog.data.baseAmount = this.rates[`${this.formDialog.data.quote}/${this.formDialog.data.base}`]['rate']*newAmount
       }
     },
     created: function () {
       var self = this
 
       this.initScripts()
+      this.getPairs()
 
       // axios is available for making requests
       // axios({
@@ -190,6 +244,144 @@
     methods: {
       createSwap: function () {
         console.log('createSwap!')
+      },
+      // updateBaseAmount: function () {
+      //   const quoteAmount = this.quoteAmount
+      //   const quote = this.formDialog.data.quote
+      //   console.log('rates, quote, quoteamount ', this.rates, quote, quoteAmount)
+      // },
+      // updateQuoteAmount: function () {
+      //   const baseAmount = this.baseAmount
+      //   const base = this.formDialog.data.base
+      //   console.log('rates, base, baseamount ', this.rates, base, baseAmount)
+      // },
+      getPairs: async function () {
+        const url = `${this.boltzApi}/getpairs`
+        try {
+          const response = await axios.get(url)
+          const { warnings, pairs } = response.data
+          console.log('got pairs ', pairs)
+          this.currencies = this.parseCurrencies(pairs)
+          this.rates = this.parseRates(pairs)
+          this.limits = this.parseLimits(pairs, this.rates)
+          this.fees = this.parseFees(pairs)
+
+          // init UI
+          // console.log('this.currencies ', this.currencies)
+          this.formDialog.data.base = this.currencies[1]
+          this.formDialog.data.quote = this.currencies[2]
+          // this.formDialog.data.baseAmount = 0.0001
+
+        } catch (error) {
+          this.$q.notify({
+            message: `Failed to get pairs from boltz API: ${error.message}`,
+            timeout: 1000
+          })
+        }
+      },
+      parseCurrencies: function (pairs) {
+        const currencies = [];
+
+        //orig
+        const pushCurrency = currency => {
+          if (!currencies.includes(currency)) {
+            currencies.push(currency);
+            if (currency === 'BTC') currencies.push(`${currency} ⚡`);
+          }
+        };
+
+        Object.keys(pairs).forEach(id => {
+          const { base, quote } = this.splitPairId(id);
+
+          pushCurrency(base);
+          pushCurrency(quote);
+        });
+
+        return currencies;
+      },
+      parseRates: function (pairs) {
+        const rates = {};
+
+        Object.keys(pairs).forEach(id => {
+          const pair = pairs[id];
+
+          // Set the rate for a sell order
+          rates[id] = {
+            pair: id,
+            rate: pair.rate,
+            orderSide: 'sell',
+          };
+
+          // And for a buy order
+          const { base, quote } = this.splitPairId(id);
+
+          if (base !== quote) {
+            rates[`${quote}/${base}`] = {
+              pair: id,
+              rate: 1 / pair.rate,
+              orderSide: 'buy',
+            };
+          }
+        });
+
+        return rates;
+      },
+      parseLimits: function (pairs, rates) {
+        const limits = {};
+
+        Object.keys(pairs).forEach(id => {
+          const pair = pairs[id];
+          const { base, quote } = this.splitPairId(id);
+
+          if (base !== quote) {
+            const reverseId = `${quote}/${base}`;
+            const reverseRate = rates[reverseId].rate;
+
+            limits[reverseId] = pair.limits;
+
+            limits[id] = {
+              minimal: Math.round(pair.limits.minimal * reverseRate),
+              maximal: Math.round(pair.limits.maximal * reverseRate),
+            };
+          } else {
+            limits[id] = pair.limits;
+          }
+        });
+
+        return limits;
+      },
+      parseFees: function (pairs) {
+        const minerFees = {};
+        const percentages = {};
+
+        Object.keys(pairs).forEach(id => {
+          const fees = pairs[id].fees;
+          const percentage = fees.percentage / 100;
+
+          const { base, quote } = this.splitPairId(id);
+
+          percentages[id] = percentage;
+          minerFees[base] = fees.minerFees.baseAsset;
+
+          if (base !== quote) {
+            percentages[`${quote}/${base}`] = percentage;
+
+            minerFees[quote] = fees.minerFees.quoteAsset;
+          }
+        });
+
+        return {
+          minerFees,
+          percentages,
+        };
+      },
+      splitPairId: function(pairId) {
+        const split = pairId.split('/');
+
+        return {
+          base: split[0],
+          quote: split[1],
+        };
       },
       initScripts: function () {
 
