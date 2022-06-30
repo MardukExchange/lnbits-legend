@@ -30,6 +30,7 @@ class ReverseSubmarineSwap(BaseModel):
     # onchain_address: str
     instant_settlement: bool
     claim_address: str
+    refund_address: str
     time: int
     status: str
     boltz_id: str
