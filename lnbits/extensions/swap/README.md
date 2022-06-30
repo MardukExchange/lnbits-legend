@@ -1,11 +1,16 @@
 <h1>Swap Extension</h1>
-<h2>*tagline*</h2>
-This is an swap extension to help you organise and build you own.
+<h2>Use any Boltz Compliant API to do Submarine Swaps on LNBits</h2>
 
-Try to include an image
-<img src="https://i.imgur.com/9i4xcQB.png">
+i.e. [Marduk Exchange](https://marduk.exchange) to swap into RBTC, SOV or xUSD.
 
+## end user usage
+* connect your `non-bitcoin` wallet, select assets to send/receive and create swaps.
 
-<h2>If your extension has API endpoints, include useful ones here</h2>
+## development/test setup
+* go to https://gitpod.io/#https://github.com/MardukExchange/lnsovbridge, deploy the contracts and make sure boltz API is running and available.
+* run local gitpod companion to make sure boltz regtest container 8081 is reachable.
+* update `BOLTZ_URL` in swap.py
+* start lnbits and make sure it can connect to boltz regtest lnd + marduk exchange API on RSK testnet
 
-<code>curl -H "Content-type: application/json" -X POST https://YOUR-LNBITS/YOUR-EXTENSION/api/v1/swap -d '{"amount":"100","memo":"swap"}' -H "X-Api-Key: YOUR_WALLET-ADMIN/INVOICE-KEY"</code>
+## acknowledgements
+* Parts of this extension is based on the work of `https://github.com/dni/lnbits-legend`  
