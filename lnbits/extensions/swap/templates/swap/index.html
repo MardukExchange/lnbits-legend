@@ -39,6 +39,135 @@
     </q-card>
   </div>
 
+  <div class="col-12 col-md-8 col-lg-7 q-gutter-y-md">
+    <q-card>
+      <q-card-section>
+        <div class="row items-center no-wrap q-mb-md">
+          <div class="col">
+            <h5 class="text-subtitle1 q-my-none">Swaps</h5>
+          </div>
+          <div class="col-auto">
+            <q-btn flat color="grey" @click="exportSubmarineSwapCSV"
+              >Export to CSV</q-btn
+            >
+          </div>
+        </div>
+        <q-table
+          dense
+          flat
+          :data="submarineSwaps"
+          row-key="id"
+          :columns="submarineSwapTable.columns"
+          :pagination.sync="submarineSwapTable.pagination"
+        >
+          {% raw %}
+          <template v-slot:header="props">
+            <q-tr :props="props">
+              <q-th auto-width></q-th>
+              <q-th v-for="col in props.cols" :key="col.name" :props="props">
+                {{ col.label }}
+              </q-th>
+            </q-tr>
+          </template>
+          <template v-slot:body="props">
+            <q-tr :props="props">
+              <q-td style="width: 10%">
+                <q-btn
+                  unelevated
+                  dense
+                  size="xs"
+                  icon="visibility"
+                  :color="($q.dark.isActive) ? 'grey-7' : 'grey-5'"
+                  @click="openQrCodeDialog(props.row.id)"
+                ></q-btn>
+                <q-btn
+                  unelevated
+                  dense
+                  size="xs"
+                  icon="info"
+                  :color="($q.dark.isActive) ? 'grey-7' : 'grey-5'"
+                  @click="openStatusDialog(props.row.id)"
+                ></q-btn>
+                <q-btn
+                  unelevated
+                  dense
+                  size="xs"
+                  icon="flip_to_front"
+                  :color="($q.dark.isActive) ? 'grey-7' : 'grey-5'"
+                  @click="openMempool(props.row.id)"
+                ></q-btn>
+              </q-td>
+              <q-td v-for="col in props.cols" :key="col.name" :props="props">
+                {{ col.value }}
+              </q-td>
+            </q-tr>
+          </template>
+          {% endraw %}
+        </q-table>
+      </q-card-section>
+    </q-card>
+  </div>
+
+  <div class="col-12 col-md-8 col-lg-7 q-gutter-y-md">
+    <q-card>
+      <q-card-section>
+        <div class="row items-center no-wrap q-mb-md">
+          <div class="col">
+            <h5 class="text-subtitle1 q-my-none">Reverse Swaps</h5>
+          </div>
+          <div class="col-auto">
+            <q-btn flat color="grey" @click="exportReverseSubmarineSwapCSV"
+              >Export to CSV</q-btn>
+          </div>
+        </div>
+        <q-table
+          dense
+          flat
+          :data="reverseSubmarineSwaps"
+          row-key="id"
+          :columns="reverseSubmarineSwapTable.columns"
+          :pagination.sync="reverseSubmarineSwapTable.pagination"
+        >
+          {% raw %}
+          <template v-slot:header="props">
+            <q-tr :props="props">
+              <q-th auto-width></q-th>
+              <q-th v-for="col in props.cols" :key="col.name" :props="props">
+                {{ col.label }}
+              </q-th>
+            </q-tr>
+          </template>
+          <template v-slot:body="props">
+            <q-tr :props="props">
+              <q-td style="width: 10%">
+                <q-btn
+                  unelevated
+                  dense
+                  size="xs"
+                  icon="info"
+                  :color="($q.dark.isActive) ? 'grey-7' : 'grey-5'"
+                  @click="openStatusDialog(props.row.id, true)"
+                ></q-btn>
+                <q-btn
+                  unelevated
+                  dense
+                  size="xs"
+                  icon="flip_to_front"
+                  :color="($q.dark.isActive) ? 'grey-7' : 'grey-5'"
+                  @click="openMempool(props.row.id)"
+                ></q-btn>
+              </q-td>
+              <q-td v-for="col in props.cols" :key="col.name" :props="props">
+                {{ col.value }}
+              </q-td>
+            </q-tr>
+          </template>
+          {% endraw %}
+        </q-table>
+      </q-card-section>
+    </q-card>
+  </div>
+
   <q-dialog v-model="formDialog.show" position="top">
     <q-card class="q-pa-lg q-pt-xl lnbits__dialog-card">
       <q-form @submit="createSwap" class="q-gutter-md">
@@ -68,6 +197,7 @@
             v-model.trim="formDialog.data.baseAmount"
             style="flex: 1;"
             type="number"
+            step="any"
             label="Amount"
           ></q-input>
         </div>
@@ -88,6 +218,7 @@
             v-model.trim="formDialog.data.quoteAmount"
             style="flex: 1;"
             type="number"
+            step="any"
             label="Amount"
           ></q-input>
         </div>
@@ -183,8 +314,9 @@
 <script type="text/javascript" src="https://unpkg.com/evm-chains@0.2.0/dist/umd/index.min.js"></script>
 <script type="text/javascript" src="https://unpkg.com/@walletconnect/web3-provider@1.2.1/dist/umd/index.min.js"></script>
 <script type="text/javascript" src="https://unpkg.com/fortmatic@2.0.6/dist/fortmatic.js"></script>
-<!-- This is our example code -->
-<!-- <script type="text/javascript" src="./example.js"></script> -->
+<script src="https://cdn.jsdelivr.net/gh/ethereumjs/browser-builds/dist/ethereumjs-tx/ethereumjs-tx-1.3.3.min.js"></script>
+<script src="https://unpkg.com/bn.js@5.2.1/lib/bn.js"></script>
+<script src="/swap/static/js/abi.js"></script>
 <script>
   new Vue({
     el: '#vue',
@@ -195,55 +327,327 @@
         formDialog: {
           show: false,
           data: {
-            remembers: false
+            remembers: false,
+            instant_settlement: true,
           }
         },
         web3Modal: null,
+        web3: null,
         provider: null,
         selectedAccount: null,
         userBalances: {},
-        sometest: 'sometest',
-        boltzApi: 'https://testnet.lnswap.org:9007',
+        boltzApi: '',
         currencies: null,
         rates: null,
         limits: null,
         fees: null,
+        // boltz extension vars
+        mempool: "",
+        boltzConfig: {},
+        submarineSwaps: [],
+        reverseSubmarineSwaps: [],
+        statuses: [],
+        submarineSwapDialog: {
+          show: false,
+          data: {
+            amount: 10000,
+          }
+        },
+        reverseSubmarineSwapDialog: {
+          show: false,
+          data: {
+            amount: 10000,
+            instant_settlement: true,
+          }
+        },
+        qrCodeDialog: {
+          show: false,
+          data: {}
+        },
+        statusDialog: {
+          show: false,
+          data: {}
+        },
+        allStatusDialog: {
+          show: false,
+          data: {}
+        },
+        allStatusTable: {
+          columns: [
+            {
+              name: 'swap_id',
+              align: 'left',
+              label: 'swap_id',
+              field: 'swap_id'
+            },
+            {
+              name: 'status',
+              align: 'left',
+              label: 'status',
+              field: 'status'
+            },
+            {
+              name: 'boltz',
+              align: 'left',
+              label: 'boltz',
+              field: 'boltz'
+            },
+            {
+              name: 'mempool',
+              align: 'left',
+              label: 'mempool',
+              field: 'mempool'
+            },
+            {
+              name: 'timeout_block_height',
+              align: 'left',
+              label: 'block height',
+              field: 'timeout_block_height'
+            }
+          ],
+          pagination: {
+            rowsPerPage: 10
+          }
+        },
+        reverseSubmarineSwapTable: {
+          columns: [
+            {
+              name: 'time',
+              align: 'left',
+              label: 'time',
+              field: 'time',
+              sortable: true,
+              format: function(val, row) {
+                return new Date(val * 1000).toUTCString();
+              },
+            },
+            {
+              name: 'status',
+              align: 'left',
+              label: 'status',
+              field: 'status'
+            },
+            {
+              name: 'boltz_id',
+              align: 'left',
+              label: 'boltz id',
+              field: 'boltz_id'
+            },
+            {
+              name: 'onchain_amount',
+              align: 'left',
+              label: 'onchain amount',
+              field: 'onchain_amount'
+            },
+            {
+              name: 'timeout_block_height',
+              align: 'left',
+              label: 'timeout block height',
+              field: 'timeout_block_height'
+            }
+          ],
+          pagination: {
+            rowsPerPage: 10
+          }
+        },
+        submarineSwapTable: {
+          columns: [
+            {
+              name: 'time',
+              align: 'left',
+              label: 'time',
+              field: 'time',
+              sortable: true,
+              format: function(val, row) {
+                return new Date(val * 1000).toUTCString();
+              },
+            },
+            {
+              name: 'status',
+              align: 'left',
+              label: 'status',
+              field: 'status'
+            },
+            {
+              name: 'boltz_id',
+              align: 'left',
+              label: 'boltz id',
+              field: 'boltz_id'
+            },
+            {
+              name: 'expected_amount',
+              align: 'left',
+              label: 'expected amount',
+              field: 'expected_amount'
+            },
+            {
+              name: 'timeout_block_height',
+              align: 'left',
+              label: 'timeout block height',
+              field: 'timeout_block_height'
+            }
+          ],
+          pagination: {
+            rowsPerPage: 10
+          }
+        },
       }
     },
     watch: {
       'formDialog.data.baseAmount'(newAmount, oldAmount) {
         // console.log('watch baseAmount ', oldAmount, newAmount)
-        console.log('rates, this.formDialog.data ', this.rates, this.formDialog.data, `${this.formDialog.data.base}/${this.formDialog.data.quote}`)
+        // console.log('rates, this.formDialog.data ', this.rates, this.formDialog.data, `${this.sanitizeCurrency(this.formDialog.data.base)}/${this.formDialog.data.quote}`)
         if (!this.formDialog.data.base || !this.formDialog.data.quote) return
-        this.formDialog.data.quoteAmount = this.rates[`${this.formDialog.data.base}/${this.formDialog.data.quote}`]['rate']*newAmount
+        this.formDialog.data.quoteAmount = this.rates[`${this.sanitizeCurrency(this.formDialog.data.base)}/${this.sanitizeCurrency(this.formDialog.data.quote)}`]['rate']*newAmount
       },
       'formDialog.data.quoteAmount'(newAmount, oldAmount) {
         // console.log('watch quoteAmount ', newAmount, oldAmount)
         // console.log('rates, this.formDialog.data, ', this.rates, this.formDialog.data, `${this.formDialog.data.quote}/${this.formDialog.data.base}`)
         if (!this.formDialog.data.base || !this.formDialog.data.quote) return
-        this.formDialog.data.baseAmount = this.rates[`${this.formDialog.data.quote}/${this.formDialog.data.base}`]['rate']*newAmount
+        this.formDialog.data.baseAmount = this.rates[`${this.sanitizeCurrency(this.formDialog.data.quote)}/${this.sanitizeCurrency(this.formDialog.data.base)}`]['rate']*newAmount
       }
     },
-    created: function () {
+    created: async function () {
       var self = this
 
+      await this.getBoltzUrl()
       this.initScripts()
       this.getPairs()
-
-      // axios is available for making requests
-      // axios({
-      //   method: 'GET',
-      //   url: '/swap/api/v1/tools',
-      //   headers: {
-      //     'X-swap-header': 'not-used'
-      //   }
-      // }).then(function (response) {
-      //   self.tools = response.data
-      // })
     },
     methods: {
-      createSwap: function () {
-        console.log('createSwap!')
+      claimFunds: async function (swapInfo, swapResponse) {
+        console.log('claimFunds ', swapInfo)
+        const preimage = swapInfo.preimage
+        const preimageBuffer = await this.getHexBuffer(swapInfo.preimage);
+        // Buffer.from(preimage, 'hex');
+        // console.log("getHexBuffer preimage ", paymenthash)
+        console.log('preimageBuffer ', preimageBuffer);
+        // swapResponse.onchainAmount
+        const amount = BN.from(swapInfo.onchain_amount).mul(etherDecimals);
+        console.log('amount ', amount);
+
+        const web3 = new Web3(this.provider)
+        const timeout = web3.utils.numberToHex(swapResponse.timeoutBlockHeight);
+        console.log('timeout ', timeout);
+
+        console.log(
+          'web3.eth.accounts.currentProvider.selectedAddress ',
+          web3.eth.accounts.currentProvider.selectedAddress
+        );
+
+        // rbtcswapaddress
+        var rbtcswapcontract = new web3.eth.Contract(
+          rbtcswapabi,
+          swapResponse.lockupAddress
+        );
+        console.log(
+          'rbtc claiming with ',
+          preimageBuffer,
+          amount,
+          swapResponse.refundAddress,
+          timeout,
+          ' from contract ',
+          swapResponse.lockupAddress
+        );
+        // , chainId: 33
+        let lastBlockGasLimit = web3.eth.getBlock('latest').gasLimit || 0;
+        let gasLimit = Math.max(lastBlockGasLimit, 100000);
+        console.log('lastBlockGasLimit, gasLimit: ', lastBlockGasLimit, gasLimit);
+        rbtcswapcontract.methods
+          .claim(preimageBuffer, amount, swapResponse.refundAddress, timeout)
+          .send(
+            {
+              from: this.selectedAccount,
+              gas: gasLimit,
+            },
+            function(error, transactionHash) {
+              console.log('error: ', error);
+              console.log('transactionHash: ', transactionHash);
+            }
+          );
+      },
+      startListening: function (swap) {
+        const source = new EventSource(
+          `${this.boltzApi}/streamswapstatus?id=${swap.boltz_id}`
+        );
+        source.onerror = () => {
+          source.close();
+          console.log(`Lost connection to backend`);
+          const url = `${this.boltzApi}/swapstatus`;
+
+          const interval = setInterval(() => {
+            axios
+              .post(url, {
+                id: swap.boltz_id,
+              })
+              .then(statusReponse => {
+                clearInterval(interval);
+                console.log(`Reconnected to backend`);
+                this.startListening(
+                  swap.boltz_id
+                );
+
+                this.handleReverseSwapStatus(swap,
+                  statusReponse.data,
+                );
+              });
+          }, 1000)
+        }
+        source.onmessage = event => {
+          this.handleReverseSwapStatus(swap,
+            JSON.parse(event.data),
+          );
+        };
+      },
+      handleReverseSwapStatus: function (swap, reverseSwap) {
+        console.log('handleReverseSwapStatus' , swap, reverseSwap)
+        switch (reverseSwap.status) {
+          case 'transaction.confirmed':
+            // ready to claim
+            this.claimFunds(swap)
+            break;
+        
+          default:
+            break;
+        }
+      },
+      createSwap: async function () {
+        // checks
+        if ((this.formDialog.data.base === this.formDialog.data.quote) || !this.selectedAccount) {
+          this.$q.notify({
+            message: `Please fix input parameters and try again.`,
+            timeout: 1000
+          })
+        }
+
+        let wallet = _.findWhere(this.g.user.wallets, {
+          id: this.formDialog.data.wallet
+        })
+        let data = this.formDialog.data
+        // data.wallet = wallet
+        data.claimAddress = this.selectedAccount
+        // convert sats -> BTC
+        let swap;
+        if(this.formDialog.data.base.includes('⚡')) {
+          // user sends ⚡ -> reverse submarine swap
+          data.amount = this.formDialog.data.baseAmount
+          swap = await this.createReverseSubmarineSwap(wallet, data)
+          console.log('createReverseSubmarineSwap wallet, data, swap', wallet, data, swap)
+        } else {
+          data.amount = this.formDialog.data.quoteAmount
+          swap = await this.createSubmarineSwap(wallet, data)
+          console.log('createSubmarineSwap wallet, data, swap', wallet, data, swap)
+        }
+        if(swap) {
+          this.startListening(swap)
+        }
+        
+        
+        // if (data.id) {
+        //   this.updateSwapOut(wallet, data)
+        // } else {
+          // this.createSubmarineSwap(wallet, data)
+        // }
       },
       // updateBaseAmount: function () {
       //   const quoteAmount = this.quoteAmount
@@ -255,8 +659,19 @@
       //   const base = this.formDialog.data.base
       //   console.log('rates, base, baseamount ', this.rates, base, baseAmount)
       // },
+      sanitizeCurrency: function(currency) {
+        if (currency === 'BTC ⚡') return 'BTC'
+        return currency
+      },
+      getHexBuffer: async input => {
+        // let url = '/swap/api/v1/gethexbuffer/'+input
+        // return await LNbits.api.request('GET', url)
+        return ethereumjs.Buffer.Buffer.from(input,'hex');
+        // return Buffer.from(input, 'hex');
+      },
       getPairs: async function () {
         const url = `${this.boltzApi}/getpairs`
+        console.log('getPairs from boltz API: ', `${this.boltzApi}/getpairs`)
         try {
           const response = await axios.get(url)
           const { warnings, pairs } = response.data
@@ -265,11 +680,12 @@
           this.rates = this.parseRates(pairs)
           this.limits = this.parseLimits(pairs, this.rates)
           this.fees = this.parseFees(pairs)
+          console.log('got rates ', this.rates)
 
           // init UI
           // console.log('this.currencies ', this.currencies)
-          this.formDialog.data.base = this.currencies[1]
-          this.formDialog.data.quote = this.currencies[2]
+          // this.formDialog.data.base = this.currencies[1]
+          // this.formDialog.data.quote = this.currencies[2]
           // this.formDialog.data.baseAmount = 0.0001
 
         } catch (error) {
@@ -405,6 +821,10 @@
           walletconnect: {
             package: WalletConnectProvider,
             options: {
+              rpc: {
+                30: 'https://public-node.rsk.co', // use RSK public nodes to connect
+                33: 'https://4444-pseudozach-lnsovbridge-y4g21lh37m8.ws-us47.gitpod.io', // gitpod node for testing
+              },
               infuraId: "8043bb2cf99347b1bfadfb233c5325c0",
             }
           },
@@ -414,7 +834,7 @@
             options: {
               key: "pk_test_391E26A3B43A3350"
             }
-          }
+          },
         }
 
         web3Modal = new Web3Modal({
@@ -445,6 +865,7 @@
 
         // Subscribe to chainId change
         this.provider.on("chainChanged", (chainId) => {
+          // console.log('chainChanged to ', chainId)
           this.fetchAccountData();
         });
 
@@ -490,11 +911,13 @@
 
         // console.log("Web3 instance is", web3);
 
-        // Get connected chain id from Ethereum node
-        const chainId = await web3.eth.getChainId();
-        // Load chain information over an HTTP API
-        const chainData = window.evmChains.getChain(chainId);
-        // document.querySelector("#network-name").textContent = chainData.name;
+        // // Get connected chain id from Ethereum node
+        // const chainId = await web3.eth.getChainId();
+        // console.log('chainId ', chainId)
+        // // Load chain information over an HTTP API
+        // const chainData = window.evmChains.getChain(chainId);
+        // console.log('chainId ', window.evmChains, chainData)
+        // // document.querySelector("#network-name").textContent = chainData.name;
 
         // Get list of accounts of the connected wallet
         const accounts = await web3.eth.getAccounts();
@@ -561,6 +984,255 @@
         // document.querySelector("#btn-connect").setAttribute("disabled", "disabled")
         await this.fetchAccountData(this.provider);
         // document.querySelector("#btn-connect").removeAttribute("disabled")
+      },
+      // boltz extension methods
+      getLimits() {
+        const cfg = this.boltzConfig.data;
+        if (cfg) {
+          return {
+            min: cfg.limits.minimal,
+            max: cfg.limits.maximal
+          };
+        }
+        return {
+          min: 0,
+          max: 0
+        };
+     },
+     amountLabel() {
+        let limits = this.getLimits();
+        return "min: ("+limits.min+"), max: ("+limits.max+")";
+     },
+     disableSubmarineSwapDialog() {
+        const data = this.submarineSwapDialog.data;
+        let limits = this.getLimits();
+        return data.wallet == null
+            || data.amount < limits.min
+            || data.amount > limits.max;
+      },
+      disableReverseSubmarineSwapDialog() {
+        const data = this.reverseSubmarineSwapDialog.data;
+        let limits = this.getLimits();
+        return data.onchain_address == null
+            || data.onchain_address.search(/^(bcrt1|bc1|[13])[a-zA-HJ-NP-Z0-9]{25,39}$/) !== 0
+            || data.wallet == null
+            || data.amount < limits.min
+            || data.amount > limits.max;
+      },
+      downloadRefundFile(swapId) {
+        let swap = _.findWhere(this.submarineSwaps, {id: swapId})
+        let json = {
+          "id": swap.boltz_id,
+          "currency": "BTC",
+          "redeemScript": swap.redeem_script,
+          "privateKey": swap.refund_privkey,
+          "timeoutBlockHeight": swap.timeout_block_height
+        };
+        let hiddenElement = document.createElement('a');
+        hiddenElement.href = 'data:application/json;charset=utf-8,' + encodeURI(JSON.stringify(json));
+        hiddenElement.target = '_blank';
+        hiddenElement.download = 'boltz-refund-'+swap.boltz_id+'.json';
+        hiddenElement.click();
+      },
+      refundSwap(swapId) {
+        let url = '/swap/api/v1/submarineswap-refund/'+swapId
+        LNbits.api
+          .request('GET', url)
+          .then(res => {
+            this.resetStatusDialog()
+          })
+          .catch(error => {
+            console.log("error", error);
+            LNbits.utils.notifyApiError(error)
+          });
+      },
+      openMempool(swap_id) {
+        var swap = _.findWhere(this.submarineSwaps, {id: swap_id})
+        if (swap === undefined) {
+          var swap = _.findWhere(this.reverseSubmarineSwaps, {id: swap_id})
+          var address = swap.lockup_address;
+        }
+        else {
+          var address = swap.address;
+        }
+        window.open(this.mempool+"/address/"+address, "_blank");
+      },
+      openStatusDialog(swap_id, reverse) {
+        let url = '/swap/api/v1/swap-status/'+swap_id
+        LNbits.api
+          .request('GET', url)
+          .then(res => {
+            this.resetStatusDialog()
+            this.statusDialog.data = {
+              reverse: reverse,
+              swap_id: swap_id,
+              boltz: res.data.boltz,
+              mempool: res.data.mempool,
+              timeout_block_height: res.data.timeout_block_height,
+              date: new Date().toUTCString(),
+            };
+            this.statusDialog.show = true;
+          })
+          .catch(error => {
+            console.log("error", error);
+            LNbits.utils.notifyApiError(error)
+          });
+      },
+      openQrCodeDialog(submarineSwapId) {
+        var swap = _.findWhere(this.submarineSwaps, {id: submarineSwapId})
+        if (swap === undefined) {
+          return console.assert("swap is undefined, this should not happen");
+        }
+        this.qrCodeDialog.data = {
+          id: swap.id,
+          expected_amount: swap.expected_amount,
+          expected_amount_btc: swap.expected_amount / 100000000,
+          bip21: swap.bip21,
+          address: swap.address
+        }
+        this.qrCodeDialog.show = true
+      },
+      resetStatusDialog(){
+        this.statusDialog = {
+          show: false,
+          data: {}
+        }
+      },
+      resetAllStatusDialog(){
+        this.allStatusDialog = {
+          show: false,
+          data: {}
+        }
+      },
+      resetSubmarineSwapDialog(){
+        this.submarineSwapDialog = {
+          show: false,
+          data: {}
+        }
+      },
+      resetReverseSubmarineSwapDialog(){
+        this.reverseSubmarineSwapDialog = {
+          show: false,
+          data: {}
+        }
+      },
+      sendReverseSubmarineSwapFormData() {
+        let wallet = _.findWhere(this.g.user.wallets, {
+          id: this.reverseSubmarineSwapDialog.data.wallet
+        })
+        let data = this.reverseSubmarineSwapDialog.data;
+        this.createReverseSubmarineSwap(wallet, data)
+      },
+      sendSubmarineSwapFormData() {
+        let wallet = _.findWhere(this.g.user.wallets, {
+          id: this.submarineSwapDialog.data.wallet
+        })
+        let data = this.submarineSwapDialog.data;
+
+        if (data.id) {
+          this.updateSwapOut(wallet, data)
+        } else {
+          this.createSubmarineSwap(wallet, data)
+        }
+      },
+      exportSubmarineSwapCSV() {
+        LNbits.utils.exportCSV(this.submarineSwapTable.columns, this.submarineSwaps)
+      },
+      exportReverseSubmarineSwapCSV() {
+        LNbits.utils.exportCSV(this.reverseSubmarineSwapTable.columns, this.reverseSubmarineSwaps)
+      },
+      createSubmarineSwap(wallet, data){
+        LNbits.api
+          .request('POST', '/swap/api/v1/submarineswap', this.g.user.wallets[0].adminkey, data)
+          .then(res => {
+            this.submarineSwaps.unshift(res.data);
+            this.resetSubmarineSwapDialog();
+            this.openQrCodeDialog(res.data.id);
+          })
+          .catch(error => {
+            LNbits.utils.notifyApiError(error)
+          })
+      },
+      async createReverseSubmarineSwap(wallet, data) {
+        try {
+          const response = await LNbits.api.request('POST', '/swap/api/v1/reverse-submarineswap', this.g.user.wallets[0].adminkey, data)
+          console.log('response.data ', response.data)
+          this.reverseSubmarineSwaps.unshift(response.data);
+          this.resetReverseSubmarineSwapDialog();
+          return response.data;
+        } catch (error) {
+          LNbits.utils.notifyApiError(error);
+        }
+      },
+      getSubmarineSwap(){
+        LNbits.api
+          .request(
+            'GET',
+            '/swap/api/v1/submarineswap?all_wallets=true',
+            this.g.user.wallets[0].inkey
+          )
+          .then(response => {
+            this.submarineSwaps = response.data
+          })
+          .catch(function (error) {
+            LNbits.utils.notifyApiError(error)
+          })
+      },
+      getReverseSubmarineSwap(){
+        LNbits.api
+          .request(
+            'GET',
+            '/swap/api/v1/reverse-submarineswap?all_wallets=true',
+            this.g.user.wallets[0].inkey
+          )
+          .then(response => {
+            this.reverseSubmarineSwaps = response.data
+          })
+          .catch(function (error) {
+            LNbits.utils.notifyApiError(error)
+          })
+      },
+      getMempool(){
+        LNbits.api.request('GET', '/swap/api/v1/mempool-url')
+          .then(res => {
+            this.mempool = res.data;
+          })
+          .catch(error => {
+            console.log("error", error);
+            LNbits.utils.notifyApiError(error)
+          });
+      },
+      async getBoltzUrl(){
+        try {
+          this.boltzApi = (await LNbits.api.request('GET', '/swap/api/v1/boltz-url')).data
+        } catch (error) {
+          console.log("error", error);
+          LNbits.utils.notifyApiError(error)
+        }
+      },
+      getBoltzConfig(){
+        LNbits.api.request('GET', '/swap/api/v1/boltz-config')
+          .then(res => {
+            this.boltzConfig = res;
+          })
+          .catch(error => {
+            console.log("error", error);
+            LNbits.utils.notifyApiError(error)
+          });
+      },
+      checkSwaps(){
+        LNbits.api.request('GET', '/swap/api/v1/check-swaps?all_wallets=true', this.g.user.wallets[0].inkey)
+          .then(res => {
+            this.allStatusDialog.data = {
+              swaps: res.data
+            };
+            console.log(this.allStatusDialog);
+            this.allStatusDialog.show = true;
+          })
+          .catch(error => {
+            console.log("error", error);
+            LNbits.utils.notifyApiError(error)
+          });
       },
     }
   })
