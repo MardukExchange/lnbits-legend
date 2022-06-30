@@ -92,7 +92,7 @@ async def get_reverse_submarine_swaps(wallet_ids: Union[str, List[str]]) -> List
 
     return [ReverseSubmarineSwap(**row) for row in rows]
 
-async def get_reverse_submarine_swap(swap_id) -> SubmarineSwap:
+async def get_reverse_submarine_swap(swap_id) -> ReverseSubmarineSwap:
     row = await db.fetchone("SELECT * FROM swap.reverse_submarineswap WHERE id = ?", (swap_id,))
     return ReverseSubmarineSwap(**row) if row else None
 
@@ -114,11 +114,12 @@ async def create_reverse_submarine_swap(data: CreateReverseSubmarineSwap) -> Opt
             lockup_address,
             onchain_amount,
             claim_address,
+            refund_address,
             timeout_block_height,
             redeem_script,
             amount
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             swap_id,
@@ -132,6 +133,7 @@ async def create_reverse_submarine_swap(data: CreateReverseSubmarineSwap) -> Opt
             swap.onchain_amount,
             # swap.onchain_address,
             swap.claim_address,
+            swap.refund_address,
             swap.timeout_block_height,
             swap.redeem_script,
             swap.amount

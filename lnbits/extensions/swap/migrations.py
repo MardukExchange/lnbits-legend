@@ -1,63 +1,4 @@
-# async def m001_initial(db):
-#     """
-#     Initial livestream tables.
-#     """
-#     await db.execute(
-#         f"""
-#         CREATE TABLE swap.livestreams (
-#             id {db.serial_primary_key},
-#             wallet TEXT NOT NULL,
-#             fee_pct INTEGER NOT NULL DEFAULT 10,
-#             current_track INTEGER
-#         );
-#         """
-#     )
-
-#     await db.execute(
-#         f"""
-#         CREATE TABLE swap.producers (
-#             livestream INTEGER NOT NULL REFERENCES {db.references_schema}livestreams (id),
-#             id {db.serial_primary_key},
-#             "user" TEXT NOT NULL,
-#             wallet TEXT NOT NULL,
-#             name TEXT NOT NULL
-#         );
-#         """
-#     )
-
-#     await db.execute(
-#         f"""
-#         CREATE TABLE swap.tracks (
-#             livestream INTEGER NOT NULL REFERENCES {db.references_schema}livestreams (id),
-#             id {db.serial_primary_key},
-#             download_url TEXT,
-#             price_msat INTEGER NOT NULL DEFAULT 0,
-#             name TEXT,
-#             producer INTEGER REFERENCES {db.references_schema}producers (id) NOT NULL
-#         );
-#         """
-#     )
-
-
-
-
-
 async def m001_initial(db):
-    # await db.execute(
-    #     """
-    #     CREATE TABLE swap.wtf (
-    #         id TEXT PRIMARY KEY,
-    #         wallet TEXT NOT NULL,
-    #         secret TEXT NOT NULL,
-    #         url TEXT NOT NULL,
-    #         memo TEXT NOT NULL,
-    #         amount INTEGER NOT NULL,
-    #         time TIMESTAMP NOT NULL DEFAULT """
-    #     + db.timestamp_now
-    #     + """
-    #     );
-    # """
-    # )
     await db.execute(
         """
         CREATE TABLE swap.submarineswap (
@@ -84,6 +25,7 @@ async def m001_initial(db):
             id TEXT PRIMARY KEY,
             wallet TEXT NOT NULL,
             claim_address TEXT NOT NULL,
+            refund_address TEXT NOT NULL,
             amount INT NOT NULL,
             instant_settlement INT NOT NULL,
             status TEXT NOT NULL,
