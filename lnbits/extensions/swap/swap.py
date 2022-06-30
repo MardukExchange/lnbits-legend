@@ -29,8 +29,10 @@ from lnbits.core.services import (
     pay_invoice
 )
 
+from . import db
 # from .crud import update_swap_status
 # from lnbits.core.services import db
+# from .tasks import set_swap_status
 
 from .models import (
     CreateSubmarineSwap,
@@ -46,7 +48,7 @@ from .models import (
 
 net = NETWORKS['regtest']
 # BOLTZ_URL = "http://boltz:9001"
-BOLTZ_URL = "https://9001-pseudozach-lnsovbridge-gcx62ulkemy.ws-us47.gitpod.io"
+BOLTZ_URL = "https://9001-pseudozach-lnsovbridge-jikrjwkdbr0.ws-us51.gitpod.io"
 # MEMPOOL_SPACE_URL = "http://mempool-web:8080"
 # MEMPOOL_SPACE_URL_WS = "ws://mempool-web:8080"
 
@@ -189,6 +191,7 @@ async def create_reverse_swap(swap_id, data: CreateReverseSubmarineSwap):
         wallet = data.wallet,
         # onchain_address = data.onchain_address,
         claim_address = data.claimAddress,
+        refund_address = res["refundAddress"],
         instant_settlement = data.instant_settlement,
         claim_privkey = claim_privkey.wif(net),
         preimage = preimage.hex(),
@@ -219,10 +222,12 @@ async def wait_for_onchain_tx(swap: ReverseSubmarineSwap, invoice):
             ))
         else:
             swap.status = swap_status['status']
-        # if swap_status['status'] == 'transaction.confirmed':
-        #     swap.status = 'transaction.confirmed'
+
+        if swap_status['status'] == 'transaction.confirmed':
+            swap.status = 'completed'
             # funds are ready, claim the onchain funds on UI
-                
+        
+        await db.execute("UPDATE swap.reverse_submarineswap SET status='"+swap.status+"' WHERE id='"+swap.id+"'")
         await asyncio.sleep(3)
         
 # async def wait_for_onchain_tx(swap: ReverseSubmarineSwap, invoice):

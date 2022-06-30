@@ -1,9 +1,9 @@
 // Decimals from WEI to 10 ** -8
-const etherDecimals = BN.from(10).pow(BN.from(10));
+const etherDecimals = new BN(10).pow(new BN(10));
 // Decimals from GWEI to WEI
-const gweiDecimals = BN.from(10).pow(BN.from(9));
+const gweiDecimals = new BN(10).pow(new BN(9));
 const decimals = new BigNumber('100000000');
-const zdecimals = BN.from(10).pow(BN.from(8));
+const zdecimals = new BN(10).pow(new BN(8));
 
 var rbtcswapabi = [
     {

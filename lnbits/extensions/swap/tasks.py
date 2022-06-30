@@ -1,12 +1,12 @@
 import asyncio
 
 from lnbits.core.models import Payment
-# from lnbits.extensions.satspay.crud import check_address_balance, get_charge
 from lnbits.tasks import register_invoice_listener
 
 from .crud import get_submarine_swap, get_reverse_submarine_swap, update_swap_status
-# from .crud import get_ticket, set_ticket_paid
 
+async def set_swap_status(swap, status):
+    await update_swap_status(swap, status)
 
 async def wait_for_paid_invoices():
     invoice_queue = asyncio.Queue()

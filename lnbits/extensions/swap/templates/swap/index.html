@@ -146,16 +146,16 @@
                   size="xs"
                   icon="info"
                   :color="($q.dark.isActive) ? 'grey-7' : 'grey-5'"
-                  @click="openStatusDialog(props.row.id, true)"
+                  @click="openExplorer()"
                 ></q-btn>
-                <q-btn
+                <!-- <q-btn
                   unelevated
                   dense
                   size="xs"
                   icon="flip_to_front"
                   :color="($q.dark.isActive) ? 'grey-7' : 'grey-5'"
                   @click="openMempool(props.row.id)"
-                ></q-btn>
+                ></q-btn> -->
               </q-td>
               <q-td v-for="col in props.cols" :key="col.name" :props="props">
                 {{ col.value }}
@@ -316,6 +316,7 @@
 <script type="text/javascript" src="https://unpkg.com/fortmatic@2.0.6/dist/fortmatic.js"></script>
 <script src="https://cdn.jsdelivr.net/gh/ethereumjs/browser-builds/dist/ethereumjs-tx/ethereumjs-tx-1.3.3.min.js"></script>
 <script src="https://unpkg.com/bn.js@5.2.1/lib/bn.js"></script>
+<script src="https://unpkg.com/bignumber.js"></script>
 <script src="/swap/static/js/abi.js"></script>
 <script>
   new Vue({
@@ -341,6 +342,7 @@
         rates: null,
         limits: null,
         fees: null,
+        explorerLink: 'https://explorer.rsk.co',
         // boltz extension vars
         mempool: "",
         boltzConfig: {},
@@ -513,6 +515,9 @@
       await this.getBoltzUrl()
       this.initScripts()
       this.getPairs()
+
+      this.getSubmarineSwap();
+      this.getReverseSubmarineSwap();
     },
     methods: {
       claimFunds: async function (swapInfo, swapResponse) {
@@ -523,11 +528,12 @@
         // console.log("getHexBuffer preimage ", paymenthash)
         console.log('preimageBuffer ', preimageBuffer);
         // swapResponse.onchainAmount
-        const amount = BN.from(swapInfo.onchain_amount).mul(etherDecimals);
+        const amount = new BN(swapInfo.onchain_amount).mul(etherDecimals);
         console.log('amount ', amount);
 
         const web3 = new Web3(this.provider)
-        const timeout = web3.utils.numberToHex(swapResponse.timeoutBlockHeight);
+        console.log('got web3 ', web3)
+        const timeout = web3.utils.numberToHex(swapInfo.timeout_block_height);
         console.log('timeout ', timeout);
 
         console.log(
@@ -538,23 +544,23 @@
         // rbtcswapaddress
         var rbtcswapcontract = new web3.eth.Contract(
           rbtcswapabi,
-          swapResponse.lockupAddress
+          swapInfo.lockup_address
         );
         console.log(
           'rbtc claiming with ',
           preimageBuffer,
           amount,
-          swapResponse.refundAddress,
+          swapInfo.refund_address,
           timeout,
           ' from contract ',
-          swapResponse.lockupAddress
+          swapInfo.lockup_address
         );
         // , chainId: 33
         let lastBlockGasLimit = web3.eth.getBlock('latest').gasLimit || 0;
         let gasLimit = Math.max(lastBlockGasLimit, 100000);
         console.log('lastBlockGasLimit, gasLimit: ', lastBlockGasLimit, gasLimit);
         rbtcswapcontract.methods
-          .claim(preimageBuffer, amount, swapResponse.refundAddress, timeout)
+          .claim(preimageBuffer, amount, swapInfo.refund_address, timeout)
           .send(
             {
               from: this.selectedAccount,
@@ -606,6 +612,13 @@
             // ready to claim
             this.claimFunds(swap)
             break;
+          case 'invoice.settled':
+            this.$q.notify({
+              message: `Swap is successful!`,
+              timeout: 1000,
+              type: 'positive',
+            })
+            break;
         
           default:
             break;
@@ -639,6 +652,7 @@
           console.log('createSubmarineSwap wallet, data, swap', wallet, data, swap)
         }
         if(swap) {
+          this.formDialog.show = false
           this.startListening(swap)
         }
         
@@ -1056,6 +1070,10 @@
           var address = swap.address;
         }
         window.open(this.mempool+"/address/"+address, "_blank");
+      },
+      openExplorer() {
+        if(!this.selectedAccount) return
+        window.open(this.explorerLink+"/address/"+this.selectedAccount.toLowerCase(), "_blank");
       },
       openStatusDialog(swap_id, reverse) {
         let url = '/swap/api/v1/swap-status/'+swap_id
