@@ -6,6 +6,7 @@ from starlette.exceptions import HTTPException
 from .swap import (
     create_swap,
     create_reverse_swap,
+    get_update_swap_status,
 )
 from lnbits.helpers import urlsafe_short_hash
 
@@ -31,6 +32,9 @@ async def get_submarine_swaps(wallet_ids: Union[str, List[str]]) -> List[Submari
     )
 
     return [SubmarineSwap(**row) for row in rows]
+
+async def update_submarine_swap_status(swap_id):
+    await get_update_swap_status(swap_id)
 
 async def get_submarine_swap(swap_id) -> SubmarineSwap:
     row = await db.fetchone("SELECT * FROM swap.submarineswap WHERE id = ?", (swap_id,))

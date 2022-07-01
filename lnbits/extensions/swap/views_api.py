@@ -28,6 +28,7 @@ from .swap import (
 )
 
 from .crud import (
+    update_submarine_swap_status,
     update_swap_status,
     create_submarine_swap,
     get_submarine_swaps,
@@ -97,6 +98,11 @@ async def api_reverse_submarineswap_create(
 ):
     swap = await create_reverse_submarine_swap(data)
     return swap.dict()
+
+@swap_ext.get("/api/v1/update-swap-status/{boltz_id}")
+async def api_update_submarineswap_status(boltz_id: str):
+   await update_submarine_swap_status(boltz_id)
+   return True
 
 # STATUS
 @swap_ext.get("/api/v1/swap-status/{swap_id}")

@@ -48,7 +48,7 @@ from .models import (
 
 net = NETWORKS['regtest']
 # BOLTZ_URL = "http://boltz:9001"
-BOLTZ_URL = "https://9001-pseudozach-lnsovbridge-4h0lur4039y.ws-us51.gitpod.io"
+BOLTZ_URL = "https://9001-pseudozach-lnsovbridge-qjc86s45sti.ws-us47.gitpod.io"
 # MEMPOOL_SPACE_URL = "http://mempool-web:8080"
 # MEMPOOL_SPACE_URL_WS = "ws://mempool-web:8080"
 
@@ -212,7 +212,7 @@ async def create_reverse_swap(swap_id, data: CreateReverseSubmarineSwap):
 async def wait_for_onchain_tx(swap: ReverseSubmarineSwap, invoice):
     while swap.status != 'completed' and swap.status != 'transaction.failed':
         swap_status = get_boltz_status(swap.boltz_id)
-        print('swap_status ' + str(swap_status))
+        print('ReverseSubmarineSwap swap_status ' + str(swap_status))
         if swap_status['status'] == 'swap.created':
             # TODO: make sure invoice is paid only once
             task = asyncio.ensure_future(pay_invoice(
@@ -230,6 +230,26 @@ async def wait_for_onchain_tx(swap: ReverseSubmarineSwap, invoice):
         await db.execute("UPDATE swap.reverse_submarineswap SET status='"+swap.status+"' WHERE id='"+swap.id+"'")
         await asyncio.sleep(3)
         
+async def track_swap_status(swap: SubmarineSwap):
+    while swap.status != 'completed' and swap.status != 'transaction.failed':
+        swap_status = get_boltz_status(swap.boltz_id)
+        print('SubmarineSwap swap_status ' + swap.boltz_id + ': ' + str(swap_status))       
+        if swap_status['status'] == 'transaction.claimed':
+            swap.status = 'completed'
+        else:
+            swap.status = swap_status['status']
+        await db.execute("UPDATE swap.submarineswap SET status='"+swap.status+"' WHERE id='"+swap.id+"'")
+        await asyncio.sleep(3)
+
+async def get_update_swap_status(swap_id):
+    swap_status = get_boltz_status(swap_id)
+    if swap_status['status'] == 'transaction.claimed':
+        status = 'completed'
+    else:
+        status = swap_status['status']
+    print('updating ' + swap_id + ' status to ' + status)
+    await db.execute("UPDATE swap.submarineswap SET status='"+status+"' WHERE boltz_id='"+swap_id+"'")
+
 # async def wait_for_onchain_tx(swap: ReverseSubmarineSwap, invoice):
 #     uri = MEMPOOL_SPACE_URL_WS + f"/api/v1/ws"
 #     async with connect(uri) as websocket:
@@ -358,7 +378,7 @@ async def create_swap(swap_id: str, data: CreateSubmarineSwap) -> SubmarineSwap:
       "invoice": payment_request
     })
 
-    return SubmarineSwap(
+    swap = SubmarineSwap(
         id = swap_id,
         time = getTimestamp(),
         wallet = data.wallet,
@@ -374,6 +394,9 @@ async def create_swap(swap_id: str, data: CreateSubmarineSwap) -> SubmarineSwap:
         redeem_script = res["redeemScript"],
         payment_hash = payment_hash,
     )
+
+    asyncio.ensure_future(track_swap_status(swap))
+    return swap
 
 def get_fee_estimation() -> int:
     # hardcoded maximum tx size, in the future we try to get the size of the tx via embit (not possible yet)

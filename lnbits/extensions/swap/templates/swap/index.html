@@ -5,20 +5,26 @@
     <q-card>
       <q-card-section>
         {% raw %}
-        <h6 
-          v-if="selectedAccount"
-          class="text-subtitle1 q-my-none"
-          style="text-align: center; margin: 4px;"
-        >
-          Address: {{ selectedAccount }}<br/>
-          Balances: {{ userBalances }}
-        </h6>
+        <div 
+          v-if="selectedAccount" 
+          style="display: flex; align-items: center; margin-bottom: 4px; justify-content: flex-end;">
+          <q-icon
+            name="account_circle"
+          ></q-icon>
+          <h6 
+            class="text-subtitle1 q-my-none"
+            style="text-align: center; margin: 4px;"
+          >
+            {{ selectedAccount.slice(0,4) + '..' + selectedAccount.slice(-4) }}<br/>
+            <!-- Balances: {{ userBalances }} -->
+          </h6>
+        </div>
+
         {% endraw %}
         <q-btn unelevated color="primary" id="connectButton" @click="onConnect" :disabled="selectedAccount"
           >Connect Wallet</q-btn
         >
-        <!-- :disabled="!selectedAccount" -->
-        <q-btn unelevated color="primary"  @click="formDialog.show = true"
+        <q-btn unelevated color="primary"  @click="formDialog.show = true" :disabled="!selectedAccount"
           >Create Swap</q-btn
         >
       </q-card-section>
@@ -86,16 +92,16 @@
                   size="xs"
                   icon="info"
                   :color="($q.dark.isActive) ? 'grey-7' : 'grey-5'"
-                  @click="openStatusDialog(props.row.id)"
+                  @click="openExplorer(props.row.id)"
                 ></q-btn>
-                <q-btn
+                <!-- <q-btn
                   unelevated
                   dense
                   size="xs"
                   icon="flip_to_front"
                   :color="($q.dark.isActive) ? 'grey-7' : 'grey-5'"
                   @click="openMempool(props.row.id)"
-                ></q-btn>
+                ></q-btn> -->
               </q-td>
               <q-td v-for="col in props.cols" :key="col.name" :props="props">
                 {{ col.value }}
@@ -222,29 +228,36 @@
             label="Amount"
           ></q-input>
         </div>
+        <div style="display: flex;">
+          <q-input
+            filled
+            dense
+            style="flex: 1; margin-right: 2px;"
+            v-model.trim="selectedRate"
+            label="Rate"
+            disable
+            placeholder="1"
+          ></q-input>
+          <q-input
+            filled
+            dense
+            style="flex: 1;"
+            autogrow
+            v-model.trim="selectedFee"
+            disable
+            type="percentage"
+            label="Fee"
+          ></q-input>
+        </div>
         <!-- <q-input
-          filled
-          dense
-          v-model.trim="formDialog.data.memo"
-          label="Title *"
-          placeholder="LNbits paywall"
-        ></q-input>
-        <q-input
-          filled
-          dense
-          autogrow
-          v-model.trim="formDialog.data.description"
-          label="Description"
-        ></q-input>
-        <q-input
           filled
           dense
           v-model.number="formDialog.data.amount"
           type="number"
           label="Amount (sat) *"
           hint="This is the minimum amount users can pay/donate."
-        ></q-input>
-        <q-list>
+        ></q-input> -->
+        <!-- <q-list>
           <q-item tag="label" class="rounded-borders">
             <q-item-section avatar>
               <q-checkbox
@@ -266,7 +279,7 @@
           <q-btn
             unelevated
             color="primary"
-            :disable="formDialog.data.baseAmount == null || formDialog.data.baseAmount < 0 || formDialog.data.quoteAmount == null || formDialog.data.quoteAmount < 0"
+            :disable="formDialog.data.baseAmount == null || formDialog.data.baseAmount < 0 || formDialog.data.quoteAmount == null || formDialog.data.quoteAmount < 0 || formDialog.unsupportedpair"
             type="submit"
             >Create Swap</q-btn
           >
@@ -288,9 +301,11 @@
       </q-responsive> -->
       <div>
         {% raw %}
+        <p>Swap ID: {{ qrCodeDialog.data?.swap?.boltz_id }}</p>
+        <p>Swap Status: {{ qrCodeDialog.data?.swap?.status }}</p>
         <b>Lock onchain funds to the swap conract by clicking below button</b><br />
         <!-- <b>Expected amount (sats): </b>  {{ qrCodeDialog.data.expected_amount }} <br /> -->
-        <b>Expected amount: </b>  {{ qrCodeDialog.data.expected_amount_btc }} <br />
+        <b>Expected amount: </b>  {{ qrCodeDialog.data.expected_amount_btc }} {{ formDialog.data.base }}<br />
         <!-- <b>Onchain Address: </b>  {{ qrCodeDialog.data.address }} <br /> -->
         {% endraw %}
       </div>
@@ -304,11 +319,20 @@
         > -->
         <q-btn
           outline
-          color="grey"
+          color="primary"
           @click="lockFunds(qrCodeDialog.data.swap)"
           class="q-ml-sm"
-          >Lock Funds</q-btn
-        >
+          :disabled="qrCodeDialog.data?.swap?.status === 'completed' || qrCodeDialog.data?.swap?.status === 'swap.expired' || !this.selectedAccount"
+          >Lock Funds
+        </q-btn>
+        <q-btn
+          outline
+          color="secondary"
+          @click="refundFunds(qrCodeDialog.data.swap)"
+          class="q-ml-sm"
+          :disabled="qrCodeDialog.data?.swap?.status === 'completed' || !this.selectedAccount"
+          >Refund
+        </q-btn>
         <q-btn v-close-popup flat color="grey" class="q-ml-auto">Close</q-btn>
       </div>
     </q-card>
@@ -425,6 +449,7 @@
         tools: [],
         formDialog: {
           show: false,
+          unsupportedpair: false,
           data: {
             remembers: false,
             instant_settlement: true,
@@ -441,6 +466,8 @@
         limits: null,
         fees: null,
         explorerLink: 'https://explorer.rsk.co',
+        selectedRate: 1,
+        selectedFee: 0.02,
         // boltz extension vars
         mempool: "",
         boltzConfig: {},
@@ -598,13 +625,43 @@
         // console.log('watch baseAmount ', oldAmount, newAmount)
         // console.log('rates, this.formDialog.data ', this.rates, this.formDialog.data, `${this.sanitizeCurrency(this.formDialog.data.base)}/${this.formDialog.data.quote}`)
         if (!this.formDialog.data.base || !this.formDialog.data.quote) return
-        this.formDialog.data.quoteAmount = this.rates[`${this.sanitizeCurrency(this.formDialog.data.base)}/${this.sanitizeCurrency(this.formDialog.data.quote)}`]['rate']*newAmount
+        try {
+          // console.log('updateQuoteAmount fee: ', ((this.rates[`${this.sanitizeCurrency(this.formDialog.data.base)}/${this.sanitizeCurrency(this.formDialog.data.quote)}`]['rate']) * newAmount), this.fees['percentages'][`${this.sanitizeCurrency(this.formDialog.data.base)}/${this.sanitizeCurrency(this.formDialog.data.quote)}`] * newAmount)
+          this.formDialog.data.quoteAmount = 
+            (
+              ((this.rates[`${this.sanitizeCurrency(this.formDialog.data.base)}/${this.sanitizeCurrency(this.formDialog.data.quote)}`]['rate']) * 
+              (newAmount * (1-this.fees['percentages'][`${this.sanitizeCurrency(this.formDialog.data.base)}/${this.sanitizeCurrency(this.formDialog.data.quote)}`]))) 
+            )
+            .toFixed(8)
+          this.selectedRate = this.rates[`${this.sanitizeCurrency(this.formDialog.data.base)}/${this.sanitizeCurrency(this.formDialog.data.quote)}`]['rate']
+          this.selectedFee = this.fees['percentages'][`${this.sanitizeCurrency(this.formDialog.data.base)}/${this.sanitizeCurrency(this.formDialog.data.quote)}`]
+          this.formDialog.unsupportedpair = false
+        } catch (error) {
+          console.log('pair not supported')
+          this.formDialog.unsupportedpair = true
+        }
+
       },
       'formDialog.data.quoteAmount'(newAmount, oldAmount) {
         // console.log('watch quoteAmount ', newAmount, oldAmount)
         // console.log('rates, this.formDialog.data, ', this.rates, this.formDialog.data, `${this.formDialog.data.quote}/${this.formDialog.data.base}`)
         if (!this.formDialog.data.base || !this.formDialog.data.quote) return
-        this.formDialog.data.baseAmount = this.rates[`${this.sanitizeCurrency(this.formDialog.data.quote)}/${this.sanitizeCurrency(this.formDialog.data.base)}`]['rate']*newAmount
+        try {
+          // console.log('updateBaseAmount fee: ', ((this.rates[`${this.sanitizeCurrency(this.formDialog.data.quote)}/${this.sanitizeCurrency(this.formDialog.data.base)}`]['rate']) * newAmount), this.fees['percentages'][`${this.sanitizeCurrency(this.formDialog.data.base)}/${this.sanitizeCurrency(this.formDialog.data.quote)}`])
+          this.formDialog.data.baseAmount = 
+            (
+              ((this.rates[`${this.sanitizeCurrency(this.formDialog.data.quote)}/${this.sanitizeCurrency(this.formDialog.data.base)}`]['rate']) * 
+              (newAmount * (1+this.fees['percentages'][`${this.sanitizeCurrency(this.formDialog.data.base)}/${this.sanitizeCurrency(this.formDialog.data.quote)}`])))
+            )
+            .toFixed(8)
+          this.selectedRate = this.rates[`${this.sanitizeCurrency(this.formDialog.data.base)}/${this.sanitizeCurrency(this.formDialog.data.quote)}`]['rate']
+          this.selectedFee = this.fees['percentages'][`${this.sanitizeCurrency(this.formDialog.data.base)}/${this.sanitizeCurrency(this.formDialog.data.quote)}`]
+          this.formDialog.unsupportedpair = false
+        } catch (error) {
+          console.log('pair not supported')
+          this.formDialog.unsupportedpair = true
+        }
+
       }
     },
     created: async function () {
@@ -618,26 +675,59 @@
       this.getReverseSubmarineSwap();
     },
     methods: {
+      refundFunds: async function (swap) {
+        console.log('refundFunds ', swap)
+        const web3 = new Web3(this.provider)
+        const thisthing = this
+
+        const preimageHashbuffer = await this.getHexBuffer(swap.payment_hash);
+        // console.log('getHexBuffer preimageHash ', swap.payment_hash);
+        // console.log('preimageHashbuffer ', preimageHashbuffer);
+        const amount = new BN(swap.expected_amount).mul(etherDecimals);
+        // console.log('amount ', amount);
+
+        const timeout = web3.utils.numberToHex(swap.timeout_block_height);
+        // console.log('timeout ', timeout);
+
+        // console.log(
+        //   'web3.eth.accounts.currentProvider.selectedAddress ',
+        //   web3.eth.accounts.currentProvider.selectedAddress
+        // );
+
+        // rbtcswapaddress
+        var rbtcswapcontract = new web3.eth.Contract(
+          rbtcswapabi,
+          swap.address
+        );
+        console.log(
+          'rbtc refunding with ',
+          preimageHashbuffer,
+          swap.claim_address.toLowerCase(),
+          timeout,
+          amount,
+          'to contract ',
+          swap.address
+        );
+        // , chainId: 33
+        rbtcswapcontract.methods
+          .refund(preimageHashbuffer, amount, swap.claim_address.toLowerCase(), timeout)
+          .send(
+            {
+              from: web3.eth.accounts.currentProvider.selectedAddress,
+              // value: amount,
+            },
+            function(error, transactionHash) {
+              console.log('refund error: ', error);
+              console.log('refund transactionHash: ', transactionHash);
+              thisthing.qrCodeDialog.show = false
+            }
+          );
+      },
       lockFunds: async function (swap) {
         console.log('lockFunds ', swap)
         const web3 = new Web3(this.provider)
+        const thisthing = this
 
-        // var decoded = decode(swap.invoice);
-        // // console.log("decoded: ", decoded);
-
-        // var obj = decoded.tags;
-        // for (let index = 0; index < obj.length; index++) {
-        //   const tag = obj[index];
-        //   // console.log("tag: ", tag);
-        //   if (tag.tagName == 'payment_hash') {
-        //     console.log('yay: ', tag.data);
-        //     var paymenthash = tag.data;
-        //   }
-        // }
-        // console.log('paymenthash: ', swap.payment_hash);
-
-        // const preimageHash = getHexBuffer(paymenthash);
-        // var preimageHashbuffer = Buffer.from(paymenthash, 'hex');
         const preimageHashbuffer = await this.getHexBuffer(swap.payment_hash);
         console.log('getHexBuffer preimageHash ', swap.payment_hash);
         console.log('preimageHashbuffer ', preimageHashbuffer);
@@ -676,7 +766,7 @@
             function(error, transactionHash) {
               console.log('error: ', error);
               console.log('transactionHash: ', transactionHash);
-              this.qrCodeDialog.show = false
+              thisthing.qrCodeDialog.show = false
             }
           );
       },
@@ -775,6 +865,7 @@
             }
             break;
           case 'invoice.settled':
+          case 'transaction.claimed':
             this.$q.notify({
               message: `Swap is successful!`,
               timeout: 1000,
@@ -782,11 +873,22 @@
             })
             // update the table
             setTimeout(() => {
+              console.log('syncing tables');
               this.getReverseSubmarineSwap()
               this.getSubmarineSwap()
-            }, 1000)
+            }, 1500)
             break;
         
+          case 'swap.expired':
+            // trigger so db updates
+            this.getSwapStatus(swap.boltz_id)
+            setTimeout(() => {
+              console.log('syncing tables');
+              this.getReverseSubmarineSwap()
+              this.getSubmarineSwap()
+            }, 1500)
+            break;
+            
           default:
             break;
         }
@@ -798,6 +900,7 @@
             message: `Please fix input parameters and try again.`,
             timeout: 1000
           })
+          return
         }
 
         let wallet = _.findWhere(this.g.user.wallets, {
@@ -856,12 +959,13 @@
         try {
           const response = await axios.get(url)
           const { warnings, pairs } = response.data
-          console.log('got pairs ', pairs)
+          // console.log('got pairs ', pairs)
           this.currencies = this.parseCurrencies(pairs)
           this.rates = this.parseRates(pairs)
           this.limits = this.parseLimits(pairs, this.rates)
           this.fees = this.parseFees(pairs)
           console.log('got rates ', this.rates)
+          // console.log('got fees ', this.fees)
 
           // init UI
           // console.log('this.currencies ', this.currencies)
@@ -1018,11 +1122,19 @@
           },
         }
 
-        web3Modal = new Web3Modal({
-          cacheProvider: false, // optional
+        this.web3Modal = new Web3Modal({
+          cacheProvider: true, // optional
           providerOptions, // required
           disableInjectedProvider: false, // optional. For MetaMask / Brave / Opera.
         })
+
+        // TODO: check if already connected?
+        // const cachedProviderName = JSON.parse(localStorage.getItem("WEB3_CONNECT_CACHED_PROVIDER"));
+        // console.log('cached? ', this.web3Modal.cacheProvider, cachedProviderName)
+        // if(cachedProviderName) {
+        //   this.provider = cachedProviderName
+        //   this.fetchAccountData()
+        // }
 
         // console.log("Web3Modal instance is", web3Modal)
       },
@@ -1031,9 +1143,9 @@
        */
       onConnect: async function () {
 
-        console.log("Opening a dialog", web3Modal);
+        console.log("Opening a dialog", this.web3Modal);
         try {
-          this.provider = await web3Modal.connect();
+          this.provider = await this.web3Modal.connect();
         } catch(e) {
           console.log("Could not get a wallet connection", e);
           return;
@@ -1242,6 +1354,15 @@
         if(!this.selectedAccount) return
         window.open(this.explorerLink+"/address/"+this.selectedAccount.toLowerCase(), "_blank");
       },
+      async updateSwapStatus(boltz_id) {
+        try {
+          console.log('triggering updateSwapStatus ', boltz_id)
+          let url = '/swap/api/v1/update-swap-status/'+boltz_id
+          await LNbits.api.request('GET', url)
+        } catch(error) {
+          console.log('getSwapStatus error: ', error.message)
+        }
+      },
       openStatusDialog(swap_id, reverse) {
         let url = '/swap/api/v1/swap-status/'+swap_id
         LNbits.api
@@ -1263,12 +1384,15 @@
             LNbits.utils.notifyApiError(error)
           });
       },
-      openQrCodeDialog(submarineSwapId) {
+      async openQrCodeDialog(submarineSwapId) {
         var swap = _.findWhere(this.submarineSwaps, {id: submarineSwapId})
         if (swap === undefined) {
           return console.assert("swap is undefined, this should not happen");
         }
-        console.log('swap data: ', swap)
+        console.log('before openQrCodeDialog swap data: ', swap)
+        await this.updateSwapStatus(swap.boltz_id)
+        console.log('after openQrCodeDialog swap data: ', swap)
+        swap = _.findWhere(this.submarineSwaps, {id: submarineSwapId})
         this.qrCodeDialog.data = {
           id: swap.id,
           expected_amount: swap.expected_amount,
