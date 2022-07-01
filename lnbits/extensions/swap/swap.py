@@ -48,13 +48,13 @@ from .models import (
 
 net = NETWORKS['regtest']
 # BOLTZ_URL = "http://boltz:9001"
-BOLTZ_URL = "https://9001-pseudozach-lnsovbridge-jikrjwkdbr0.ws-us51.gitpod.io"
+BOLTZ_URL = "https://9001-pseudozach-lnsovbridge-4h0lur4039y.ws-us51.gitpod.io"
 # MEMPOOL_SPACE_URL = "http://mempool-web:8080"
 # MEMPOOL_SPACE_URL_WS = "ws://mempool-web:8080"
 
 # net = NETWORKS['main']
 # BOLTZ_URL = "https://boltz.exchange/api"
-MEMPOOL_SPACE_URL = "https://mempool.space/api"
+MEMPOOL_SPACE_URL = "https://mempool.space"
 
 def get_boltz_url():
     return BOLTZ_URL
@@ -210,10 +210,11 @@ async def create_reverse_swap(swap_id, data: CreateReverseSubmarineSwap):
 
 # check swapstatus regularly to identify when to claim the on-chain funds
 async def wait_for_onchain_tx(swap: ReverseSubmarineSwap, invoice):
-    while swap.status == 'pending':
+    while swap.status != 'completed' and swap.status != 'transaction.failed':
         swap_status = get_boltz_status(swap.boltz_id)
         print('swap_status ' + str(swap_status))
         if swap_status['status'] == 'swap.created':
+            # TODO: make sure invoice is paid only once
             task = asyncio.ensure_future(pay_invoice(
                 wallet_id=swap.wallet,
                 payment_request=invoice,
@@ -222,10 +223,9 @@ async def wait_for_onchain_tx(swap: ReverseSubmarineSwap, invoice):
             ))
         else:
             swap.status = swap_status['status']
-
-        if swap_status['status'] == 'transaction.confirmed':
+        if swap_status['status'] == 'invoice.settled':
             swap.status = 'completed'
-            # funds are ready, claim the onchain funds on UI
+        # funds are ready, claim the onchain funds on UI
         
         await db.execute("UPDATE swap.reverse_submarineswap SET status='"+swap.status+"' WHERE id='"+swap.id+"'")
         await asyncio.sleep(3)
@@ -332,11 +332,16 @@ async def send_onchain_tx(tx: Transaction):
 
 # send on on-chain, receive lightning
 async def create_swap(swap_id: str, data: CreateSubmarineSwap) -> SubmarineSwap:
+    if '⚡' in data.base:
+        data.base = 'BTC'
+    if '⚡' in data.quote:
+        data.quote = 'BTC'
+    invoiceAmount = round(data.amount * 10**8)
     try:
         payment_hash, payment_request = await create_invoice(
             wallet_id=data.wallet,
-            amount=data.amount,
-            memo=f"submarine swap of {data.amount} sats on boltz.exchange",
+            amount=invoiceAmount,
+            memo=f"submarine swap of {invoiceAmount} sats on marduk.exchange",
             extra={"tag": "swap", "swap_id": swap_id},
         )
     except Exception as e:
@@ -347,7 +352,7 @@ async def create_swap(swap_id: str, data: CreateSubmarineSwap) -> SubmarineSwap:
 
     res = create_post_request(BOLTZ_URL + "/createswap", {
       "type": "submarine",
-      "pairId": "BTC/BTC",
+      "pairId": data.base + "/" + data.quote,
       "orderSide": "sell",
       "refundPublicKey": refund_pubkey_hex,
       "invoice": payment_request
@@ -362,10 +367,12 @@ async def create_swap(swap_id: str, data: CreateSubmarineSwap) -> SubmarineSwap:
         boltz_id = res["id"],
         status = "pending",
         address = res["address"],
+        claim_address = res["claimAddress"],
         expected_amount = res["expectedAmount"],
         timeout_block_height = res["timeoutBlockHeight"],
-        bip21 = res["bip21"],
+        # bip21 = res["bip21"],
         redeem_script = res["redeemScript"],
+        payment_hash = payment_hash,
     )
 
 def get_fee_estimation() -> int:
