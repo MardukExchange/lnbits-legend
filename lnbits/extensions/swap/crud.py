@@ -51,11 +51,12 @@ async def create_submarine_swap(data: CreateSubmarineSwap) -> Optional[Submarine
             expected_amount,
             timeout_block_height,
             address,
-            bip21,
+            claim_address,
             redeem_script,
-            amount
+            amount,
+            payment_hash
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             swap_id,
@@ -66,9 +67,10 @@ async def create_submarine_swap(data: CreateSubmarineSwap) -> Optional[Submarine
             swap.expected_amount,
             swap.timeout_block_height,
             swap.address,
-            swap.bip21,
+            swap.claim_address,
             swap.redeem_script,
-            swap.amount
+            swap.amount,
+            swap.payment_hash,
         )
     )
     return await get_submarine_swap(swap_id)

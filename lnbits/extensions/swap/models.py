@@ -15,13 +15,20 @@ class SubmarineSwap(BaseModel):
     boltz_id: str
     expected_amount: int
     timeout_block_height: int
+    claim_address: str
     address: str
-    bip21: str
+    # bip21: str
     redeem_script: str
+    payment_hash: str
 
 class CreateSubmarineSwap(BaseModel):
     wallet: str = Query(...)
-    amount: int = Query(..., ge=10000, le=4294967)
+    # amount: int = Query(..., ge=10000, le=4294967)
+    amount: float = Query(...)
+    base: str = Query(...)
+    quote: str = Query(...)
+    baseAmount: float = Query(...)
+    quoteAmount: float = Query(...)
 
 class ReverseSubmarineSwap(BaseModel):
     id: str

@@ -11,7 +11,8 @@ async def m001_initial(db):
             expected_amount INT NOT NULL,
             timeout_block_height INT NOT NULL,
             address TEXT NOT NULL,
-            bip21 TEXT NOT NULL,
+            claim_address TEXT NOT NULL,
+            payment_hash TEXT NOT NULL,
             redeem_script TEXT NOT NULL,
             time TIMESTAMP NOT NULL DEFAULT """
         + db.timestamp_now
