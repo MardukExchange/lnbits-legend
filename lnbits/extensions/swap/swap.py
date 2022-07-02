@@ -168,10 +168,17 @@ async def create_reverse_swap(swap_id, data: CreateReverseSubmarineSwap):
     preimage = os.urandom(32)
     preimage_hash = sha256(preimage).hexdigest()
 
+    pairId = data.base + "/" + data.quote
+    orderSide = "sell"
+    if data.quote == "BTC":
+        pairId = data.quote + "/" + data.base
+        orderSide = "buy"
+    print('pairId ' + pairId)
+
     res = create_post_request(BOLTZ_URL + "/createswap", {
         "type": "reversesubmarine",
-        "pairId": data.base + "/" + data.quote,
-        "orderSide": "sell",
+        "pairId": pairId,
+        "orderSide": orderSide,
         "invoiceAmount": invoiceAmount,
         "preimageHash": preimage_hash,
         "claimPublicKey": claim_pubkey_hex,
@@ -372,10 +379,17 @@ async def create_swap(swap_id: str, data: CreateSubmarineSwap) -> SubmarineSwap:
     refund_privkey = ec.PrivateKey(os.urandom(32), True, net)
     refund_pubkey_hex = hexlify(refund_privkey.sec()).decode("UTF-8")
 
+    pairId = data.quote + "/" + data.base
+    orderSide = "buy"
+    if data.quote == "BTC":
+        pairId = data.base + "/" + data.quote
+        orderSide = "sell"
+    print('pairId ' + pairId)
+
     res = create_post_request(BOLTZ_URL + "/createswap", {
       "type": "submarine",
-      "pairId": data.quote + "/" + data.base  ,
-      "orderSide": "buy",
+      "pairId": pairId,
+      "orderSide": orderSide,
       "refundPublicKey": refund_pubkey_hex,
       "invoice": payment_request
     })
