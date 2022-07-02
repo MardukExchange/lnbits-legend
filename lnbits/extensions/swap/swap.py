@@ -231,7 +231,7 @@ async def wait_for_onchain_tx(swap: ReverseSubmarineSwap, invoice):
         await asyncio.sleep(3)
         
 async def track_swap_status(swap: SubmarineSwap):
-    while swap.status != 'completed' and swap.status != 'transaction.failed':
+    while swap.status != 'completed' and swap.status != 'transaction.failed' and swap.status != 'swap.expired':
         swap_status = get_boltz_status(swap.boltz_id)
         print('SubmarineSwap swap_status ' + swap.boltz_id + ': ' + str(swap_status))       
         if swap_status['status'] == 'transaction.claimed':
