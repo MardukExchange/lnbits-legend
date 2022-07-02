@@ -33,8 +33,10 @@ async def get_submarine_swaps(wallet_ids: Union[str, List[str]]) -> List[Submari
 
     return [SubmarineSwap(**row) for row in rows]
 
-async def update_submarine_swap_status(swap_id):
-    await get_update_swap_status(swap_id)
+async def update_submarine_swap_status(boltz_id) -> SubmarineSwap:
+    await get_update_swap_status(boltz_id)
+    row = await db.fetchone("SELECT * FROM swap.submarineswap WHERE boltz_id = ?", (boltz_id,))
+    return SubmarineSwap(**row) if row else None
 
 async def get_submarine_swap(swap_id) -> SubmarineSwap:
     row = await db.fetchone("SELECT * FROM swap.submarineswap WHERE id = ?", (swap_id,))

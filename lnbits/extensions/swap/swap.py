@@ -170,8 +170,8 @@ async def create_reverse_swap(swap_id, data: CreateReverseSubmarineSwap):
 
     res = create_post_request(BOLTZ_URL + "/createswap", {
         "type": "reversesubmarine",
-        "pairId": data.quote + "/" + data.base,
-        "orderSide": "buy",
+        "pairId": data.base + "/" + data.quote,
+        "orderSide": "sell",
         "invoiceAmount": invoiceAmount,
         "preimageHash": preimage_hash,
         "claimPublicKey": claim_pubkey_hex,
@@ -210,7 +210,7 @@ async def create_reverse_swap(swap_id, data: CreateReverseSubmarineSwap):
 
 # check swapstatus regularly to identify when to claim the on-chain funds
 async def wait_for_onchain_tx(swap: ReverseSubmarineSwap, invoice):
-    while swap.status != 'completed' and swap.status != 'transaction.failed':
+    while swap.status != 'completed' and swap.status != 'transaction.failed' and swap.status != 'swap.expired':
         swap_status = get_boltz_status(swap.boltz_id)
         print('ReverseSubmarineSwap swap_status ' + str(swap_status))
         if swap_status['status'] == 'swap.created':
@@ -247,8 +247,10 @@ async def get_update_swap_status(swap_id):
         status = 'completed'
     else:
         status = swap_status['status']
-    print('updating ' + swap_id + ' status to ' + status)
+    # print('updating ' + swap_id + ' status to ' + status)
     await db.execute("UPDATE swap.submarineswap SET status='"+status+"' WHERE boltz_id='"+swap_id+"'")
+    await asyncio.sleep(1)
+    # print('returning from db update ')
 
 # async def wait_for_onchain_tx(swap: ReverseSubmarineSwap, invoice):
 #     uri = MEMPOOL_SPACE_URL_WS + f"/api/v1/ws"
@@ -372,8 +374,8 @@ async def create_swap(swap_id: str, data: CreateSubmarineSwap) -> SubmarineSwap:
 
     res = create_post_request(BOLTZ_URL + "/createswap", {
       "type": "submarine",
-      "pairId": data.base + "/" + data.quote,
-      "orderSide": "sell",
+      "pairId": data.quote + "/" + data.base  ,
+      "orderSide": "buy",
       "refundPublicKey": refund_pubkey_hex,
       "invoice": payment_request
     })

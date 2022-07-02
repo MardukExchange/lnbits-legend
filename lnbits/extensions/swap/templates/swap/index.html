@@ -320,7 +320,7 @@
         <q-btn
           outline
           color="primary"
-          @click="lockFunds(qrCodeDialog.data.swap)"
+          @click="!qrCodeDialog.data?.swap?.redeem_script ? lockFunds(qrCodeDialog.data.swap) : lockTokens(qrCodeDialog.data.swap)"
           class="q-ml-sm"
           :disabled="qrCodeDialog.data?.swap?.status === 'completed' || qrCodeDialog.data?.swap?.status === 'swap.expired' || !this.selectedAccount"
           >Lock Funds
@@ -328,9 +328,9 @@
         <q-btn
           outline
           color="secondary"
-          @click="refundFunds(qrCodeDialog.data.swap)"
+          @click="!qrCodeDialog.data?.swap?.redeem_script ? refundFunds(qrCodeDialog.data.swap) : refundTokens(qrCodeDialog.data.swap)"
           class="q-ml-sm"
-          :disabled="qrCodeDialog.data?.swap?.status === 'completed' || !this.selectedAccount"
+          :disabled="qrCodeDialog.data?.swap?.status === 'completed' || qrCodeDialog.data?.swap?.status === 'invoice.set' || !this.selectedAccount"
           >Refund
         </q-btn>
         <q-btn v-close-popup flat color="grey" class="q-ml-auto">Close</q-btn>
@@ -437,7 +437,7 @@
 <script src="https://cdn.jsdelivr.net/gh/ethereumjs/browser-builds/dist/ethereumjs-tx/ethereumjs-tx-1.3.3.min.js"></script>
 <script src="https://unpkg.com/bn.js@5.2.1/lib/bn.js"></script>
 <script src="https://unpkg.com/bignumber.js"></script>
-<!-- <script src="/swap/static/js/bolt11.js"></script> -->
+<!-- <script src="/swap/static/js/buffer.js"></script> -->
 <script src="/swap/static/js/abi.js"></script>
 <script>
   // Vue.component(VueQrcode.name, VueQrcode)
@@ -633,7 +633,8 @@
               (newAmount * (1-this.fees['percentages'][`${this.sanitizeCurrency(this.formDialog.data.base)}/${this.sanitizeCurrency(this.formDialog.data.quote)}`]))) 
             )
             .toFixed(8)
-          this.selectedRate = this.rates[`${this.sanitizeCurrency(this.formDialog.data.base)}/${this.sanitizeCurrency(this.formDialog.data.quote)}`]['rate']
+          this.selectedRate = (this.rates[`${this.sanitizeCurrency(this.formDialog.data.base)}/${this.sanitizeCurrency(this.formDialog.data.quote)}`]['rate'])
+            .toFixed(8)
           this.selectedFee = this.fees['percentages'][`${this.sanitizeCurrency(this.formDialog.data.base)}/${this.sanitizeCurrency(this.formDialog.data.quote)}`]
           this.formDialog.unsupportedpair = false
         } catch (error) {
@@ -654,7 +655,8 @@
               (newAmount * (1+this.fees['percentages'][`${this.sanitizeCurrency(this.formDialog.data.base)}/${this.sanitizeCurrency(this.formDialog.data.quote)}`])))
             )
             .toFixed(8)
-          this.selectedRate = this.rates[`${this.sanitizeCurrency(this.formDialog.data.base)}/${this.sanitizeCurrency(this.formDialog.data.quote)}`]['rate']
+          this.selectedRate = (this.rates[`${this.sanitizeCurrency(this.formDialog.data.base)}/${this.sanitizeCurrency(this.formDialog.data.quote)}`]['rate']
+            .toFixed(8))
           this.selectedFee = this.fees['percentages'][`${this.sanitizeCurrency(this.formDialog.data.base)}/${this.sanitizeCurrency(this.formDialog.data.quote)}`]
           this.formDialog.unsupportedpair = false
         } catch (error) {
@@ -722,6 +724,128 @@
               thisthing.qrCodeDialog.show = false
             }
           );
+      },
+      refundTokens: async function (swap) {
+        console.log('refundTokens ', swap)
+        const web3 = new Web3(this.provider)
+        const thisthing = this
+
+        const preimageHashbuffer = await this.getHexBuffer(swap.payment_hash);
+        const amount = new BN(swap.expected_amount).mul(etherDecimals);
+        const timeout = web3.utils.numberToHex(swap.timeout_block_height);
+
+        const tokenAddress = ethereumjs.Buffer.Buffer.from(swap.redeem_script, 'hex').toString(
+          'utf8'
+        );
+        console.log('tokenAddress: ', tokenAddress);
+        var erc20tokencontract = new web3.eth.Contract(erc20tokenabi, tokenAddress);
+        var erc20swapcontract = new web3.eth.Contract(
+          erc20swapabi,
+          swap.address
+        );
+        console.log(
+          'erc20 refund with ',
+          preimageHashbuffer,
+          amount,
+          tokenAddress.toLowerCase(),
+          swap.claim_address.toLowerCase(),
+          timeout,
+          'from contract ',
+          swap.address
+        );
+        // , chainId: 33
+        let lastBlockGasLimit = web3.eth.getBlock('latest').gasLimit || 0;
+        let gasLimit = Math.max(lastBlockGasLimit, 100000);
+
+        erc20swapcontract.methods
+          .refund(
+            preimageHashbuffer,
+            amount,
+            tokenAddress.toLowerCase(),
+            swap.claim_address.toLowerCase(),
+            timeout
+          )
+          .send(
+            {
+              from: w3.account,
+              gas: gasLimit,
+            },
+            function(error, transactionHash) {
+              console.log('refund error: ', error);
+              console.log('refund transactionHash: ', transactionHash);
+            }
+          );
+      },
+      lockTokens: async function (swap) {
+        console.log('lockTokens ', swap)
+        const web3 = new Web3(this.provider)
+        const thisthing = this
+
+        const preimageHashbuffer = await this.getHexBuffer(swap.payment_hash);
+        // console.log('getHexBuffer preimageHash ', swap.payment_hash);
+        // console.log('preimageHashbuffer ', preimageHashbuffer);
+        const amount = new BN(swap.expected_amount).mul(etherDecimals);
+        // console.log('amount ', amount);
+        const timeout = web3.utils.numberToHex(swap.timeout_block_height);
+
+        const tokenAddress = ethereumjs.Buffer.Buffer.from(swap.redeem_script, 'hex').toString(
+          'utf8'
+        );
+        console.log('tokenAddress: ', tokenAddress);
+        var erc20tokencontract = new web3.eth.Contract(erc20tokenabi, tokenAddress);
+        var erc20swapcontract = new web3.eth.Contract(
+          erc20swapabi,
+          swap.address
+        );
+        console.log(
+          'erc20 approving ',
+          amount + ' on token ' + tokenAddress,
+          'erc20 locking with ',
+          preimageHashbuffer,
+          amount,
+          tokenAddress.toLowerCase(),
+          swap.claim_address.toLowerCase(),
+          timeout,
+          'to contract ',
+          swap.address
+        );
+        // , chainId: 33
+        let lastBlockGasLimit = web3.eth.getBlock('latest').gasLimit || 0;
+        let gasLimit = Math.max(lastBlockGasLimit, 100000);
+
+        erc20tokencontract.methods.approve(swap.address, amount).send(
+          {
+            from: web3.eth.accounts.currentProvider.selectedAddress,
+            gas: gasLimit,
+          },
+          function(error, transactionHash) {
+            console.log('approve error: ', error);
+            console.log('approve transactionHash: ', transactionHash);
+
+            // give a small delay for token tx after approval - avoid issue
+            setTimeout(function() {
+              erc20swapcontract.methods
+              .lock(
+                preimageHashbuffer,
+                amount,
+                tokenAddress.toLowerCase(),
+                swap.claim_address.toLowerCase(),
+                timeout
+              )
+              .send(
+                {
+                  from: web3.eth.accounts.currentProvider.selectedAddress,
+                  gas: gasLimit,
+                },
+                function(error, transactionHash) {
+                  console.log('lock error: ', error);
+                  console.log('lock transactionHash: ', transactionHash);
+                  thisthing.qrCodeDialog.show = false
+                }
+              );
+            }, 500)
+          }
+        );
       },
       lockFunds: async function (swap) {
         console.log('lockFunds ', swap)
@@ -876,7 +1000,7 @@
               console.log('syncing tables');
               this.getReverseSubmarineSwap()
               this.getSubmarineSwap()
-            }, 1500)
+            }, 1000)
             break;
         
           case 'swap.expired':
@@ -886,9 +1010,17 @@
               console.log('syncing tables');
               this.getReverseSubmarineSwap()
               this.getSubmarineSwap()
-            }, 1500)
+            }, 1000)
             break;
             
+          case 'transaction.failed':
+            this.$q.notify({
+              message: `Swap failed.`,
+              timeout: 1000,
+              type: 'negative',
+            })
+            break
+
           default:
             break;
         }
@@ -1356,9 +1488,11 @@
       },
       async updateSwapStatus(boltz_id) {
         try {
-          console.log('triggering updateSwapStatus ', boltz_id)
+          // console.log('triggering updateSwapStatus ', boltz_id)
           let url = '/swap/api/v1/update-swap-status/'+boltz_id
-          await LNbits.api.request('GET', url)
+          const res = await LNbits.api.request('GET', url)
+          // console.log('updateSwapStatus for ', boltz_id, res.data)
+          return res.data
         } catch(error) {
           console.log('getSwapStatus error: ', error.message)
         }
@@ -1389,10 +1523,10 @@
         if (swap === undefined) {
           return console.assert("swap is undefined, this should not happen");
         }
-        console.log('before openQrCodeDialog swap data: ', swap)
-        await this.updateSwapStatus(swap.boltz_id)
-        console.log('after openQrCodeDialog swap data: ', swap)
-        swap = _.findWhere(this.submarineSwaps, {id: submarineSwapId})
+        // console.log('before openQrCodeDialog swap data: ', new Date(), swap)
+        swap = await this.updateSwapStatus(swap.boltz_id)
+        // swap = _.findWhere(this.submarineSwaps, {id: submarineSwapId})
+        // console.log('after openQrCodeDialog swap data: ', swap, swap?.redeem_script)
         this.qrCodeDialog.data = {
           id: swap.id,
           expected_amount: swap.expected_amount,

@@ -101,8 +101,7 @@ async def api_reverse_submarineswap_create(
 
 @swap_ext.get("/api/v1/update-swap-status/{boltz_id}")
 async def api_update_submarineswap_status(boltz_id: str):
-   await update_submarine_swap_status(boltz_id)
-   return True
+   return await update_submarine_swap_status(boltz_id)
 
 # STATUS
 @swap_ext.get("/api/v1/swap-status/{swap_id}")
