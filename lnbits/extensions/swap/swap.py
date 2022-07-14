@@ -46,9 +46,11 @@ from .models import (
 # else:
 #     print("production")
 
+# net = NETWORKS['mainnet']
+BOLTZ_URL = "https://api.marduk.exchange:9001"
+
 net = NETWORKS['regtest']
-# BOLTZ_URL = "http://boltz:9001"
-BOLTZ_URL = "https://9001-pseudozach-lnsovbridge-qjc86s45sti.ws-us47.gitpod.io"
+# BOLTZ_URL = "https://9001-pseudozach-lnsovbridge-qjc86s45sti.ws-us47.gitpod.io"
 # MEMPOOL_SPACE_URL = "http://mempool-web:8080"
 # MEMPOOL_SPACE_URL_WS = "ws://mempool-web:8080"
 
